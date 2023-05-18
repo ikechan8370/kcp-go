@@ -3,6 +3,7 @@ kcp_protocol = Proto("KCP", "KCP Protocol")
 
 -- fields for kcp
 conv = ProtoField.uint32("kcp.conv", "conv", base.DEC)
+token = ProtoField.uint32("kcp.token", "token", base.DEC)
 cmd = ProtoField.uint8("kcp.cmd", "cmd", base.DEC)
 frg = ProtoField.uint8("kcp.frg", "frg", base.DEC)
 wnd = ProtoField.uint16("kcp.wnd", "wnd", base.DEC)
@@ -11,7 +12,7 @@ sn = ProtoField.uint32("kcp.sn", "sn", base.DEC)
 una = ProtoField.uint32("kcp.una", "una", base.DEC)
 len = ProtoField.uint32("kcp.len", "len", base.DEC)
 
-kcp_protocol.fields = {conv, cmd, frg, wnd, ts, sn, una, len}
+kcp_protocol.fields = {conv, token, cmd, frg, wnd, ts, sn, una, len}
 
 -- dissect each udp packet
 function kcp_protocol.dissector(buffer, pinfo, tree)
@@ -34,10 +35,11 @@ function kcp_protocol.dissector(buffer, pinfo, tree)
     local offset = 8
     while offset < buffer:len() do
         local conv_buf = buffer(offset + 0, 4)
-        local cmd_buf = buffer(offset + 4, 1)
-        local wnd_buf = buffer(offset + 6, 2)
-        local sn_buf = buffer(offset + 12, 4)
-        local len_buf = buffer(offset + 20, 4)
+        local token_buf = buffer(offset + 4, 4)
+        local cmd_buf = buffer(offset + 8, 1)
+        local wnd_buf = buffer(offset + 10, 2)
+        local sn_buf = buffer(offset + 16, 4)
+        local len_buf = buffer(offset + 24, 4)
 
         local cmd_name = get_cmd_name(cmd_buf:le_int())
         local data_len = len_buf:le_int()

@@ -101,6 +101,7 @@ func _itimediff(later, earlier uint32) int32 {
 // segment defines a KCP segment
 type segment struct {
 	conv     uint32
+	token    uint32
 	cmd      uint8
 	frg      uint8
 	wnd      uint16
@@ -118,6 +119,7 @@ type segment struct {
 // encode a segment into buffer
 func (seg *segment) encode(ptr []byte) []byte {
 	ptr = ikcp_encode32u(ptr, seg.conv)
+	ptr = ikcp_encode32u(ptr, seg.token)
 	ptr = ikcp_encode8u(ptr, seg.cmd)
 	ptr = ikcp_encode8u(ptr, seg.frg)
 	ptr = ikcp_encode16u(ptr, seg.wnd)
@@ -131,7 +133,7 @@ func (seg *segment) encode(ptr []byte) []byte {
 
 // KCP defines a single KCP connection
 type KCP struct {
-	conv, mtu, mss, state                  uint32
+	conv, token, mtu, mss, state           uint32
 	snd_una, snd_nxt, rcv_nxt              uint32
 	ssthresh                               uint32
 	rx_rttvar, rx_srtt                     int32
@@ -167,9 +169,10 @@ type ackItem struct {
 // 'conv' must be equal in the connection peers, or else data will be silently rejected.
 //
 // 'output' function will be called whenever these is data to be sent on wire.
-func NewKCP(conv uint32, output output_callback) *KCP {
+func NewKCP(conv uint32, token uint32, output output_callback) *KCP {
 	kcp := new(KCP)
 	kcp.conv = conv
+	kcp.token = token
 	kcp.snd_wnd = IKCP_WND_SND
 	kcp.rcv_wnd = IKCP_WND_RCV
 	kcp.rmt_wnd = IKCP_WND_RCV
@@ -538,7 +541,7 @@ func (kcp *KCP) Input(data []byte, regular, ackNoDelay bool) int {
 	var windowSlides bool
 
 	for {
-		var ts, sn, length, una, conv uint32
+		var ts, sn, length, una, conv, token uint32
 		var wnd uint16
 		var cmd, frg uint8
 
@@ -550,7 +553,7 @@ func (kcp *KCP) Input(data []byte, regular, ackNoDelay bool) int {
 		if conv != kcp.conv {
 			return -1
 		}
-
+		data = ikcp_decode32u(data, &token)
 		data = ikcp_decode8u(data, &cmd)
 		data = ikcp_decode8u(data, &frg)
 		data = ikcp_decode16u(data, &wnd)
@@ -588,6 +591,7 @@ func (kcp *KCP) Input(data []byte, regular, ackNoDelay bool) int {
 				if _itimediff(sn, kcp.rcv_nxt) >= 0 {
 					var seg segment
 					seg.conv = conv
+					seg.token = token
 					seg.cmd = cmd
 					seg.frg = frg
 					seg.wnd = wnd
@@ -673,6 +677,7 @@ func (kcp *KCP) wnd_unused() uint16 {
 func (kcp *KCP) flush(ackOnly bool) uint32 {
 	var seg segment
 	seg.conv = kcp.conv
+	seg.token = kcp.token
 	seg.cmd = IKCP_CMD_ACK
 	seg.wnd = kcp.wnd_unused()
 	seg.una = kcp.rcv_nxt
